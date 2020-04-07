@@ -1,0 +1,208 @@
+---
+title: "Results EC50 assay for MTZ August 2019"
+author: "Sascha Krakovka"
+#date: "`r Sys.Date()`"
+output: 
+html_notebook:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+    df_print: paged
+    code_folding: hide
+    fig_width: 6
+    fig_height: 6
+---
+
+
+```{r , include=FALSE}
+#Call for the needed libraries in order of usage
+library(tidyverse)
+library(DT)
+library(modelr)
+options(na.action = na.warn)
+library(knitr)
+opts_knit$set(progress = FALSE, verbose = FALSE)
+opts_chunk$set(warning=FALSE, message=FALSE, echo=FALSE)
+library(tinytex)
+library(grid)
+library(ggplot2)
+```
+
+
+
+#Results
+###Take all survival rates for the four strains under one drug and combine them to calculate a EC50
+Here I take all survival rates from the diverent biological replicates and fit a curve as smooth curve. 
+
+```{r}
+a <- read_csv("MTZ_1.csv")
+b <- read_csv("MTZ_2.csv")
+c <- read_csv("MTZ_3.csv")
+d <- read_csv("MTZ_4.csv")
+e <- read_csv("MTZ_5.csv")
+f <- read_csv("MTZ_6.csv")
+MTZ <- rbind(a,b,c,d,e,f)
+#MTZ <- rbind(e,f)
+
+
+
+#Filter to only keep values that actually show the drug effect and not the noice. I choose 90% as upper limit and 5% as lower limit
+MTZ_WB <- filter(MTZ, WB<=105 & WB >= 0.1)
+MTZ_C6NR <- filter(MTZ, C6NR<=105 & C6NR >= 0.1)
+MTZ_C6aI <- filter(MTZ, C6aI<=105 & C6aI >= 0.1)
+MTZ_C60.5 <- filter(MTZ, C60.5<=105 & C60.5 >=0.1)
+
+```
+
+
+```{r}
+#See how it looks and think about y scale for this one
+# Plot it 
+ggplot()+
+    labs(title ="IC50 MTZ")+
+    ylab("Procent survival MTZ")+
+    xlab("Concentration metronidazole in µM")+
+    theme(plot.caption = element_text(size = 11))+
+    geom_point (mapping = aes(x = Conc, y = WB), data = MTZ_WB, color="red")+
+    geom_point (mapping = aes(x = Conc, y = C6NR), data = MTZ_C6NR, color="blue")+
+    geom_point (mapping = aes(x = Conc, y = C60.5), data = MTZ_C60.5, color="green")+
+    geom_point (mapping = aes(x = Conc, y = C6aI), data = MTZ_C6aI, color="black")+ 
+    stat_smooth(mapping = aes(x = Conc, y = WB), data = MTZ_WB, color="red", formula = y ~log(x))+
+    stat_smooth(mapping = aes(x = Conc, y = C6NR), data = MTZ_C6NR, color="blue", formula = y ~log(x))+
+    stat_smooth(mapping = aes(x = Conc, y = C60.5), data = MTZ_C60.5, color="green", formula = y ~log(x))+
+    stat_smooth(mapping = aes(x = Conc, y = C6aI), data = MTZ_C6aI, color="black", formula = y ~log(x))+
+    theme_bw() +
+    scale_y_continuous(limits = c(0.1,105))+
+    #scale_y_continuous(limits = c(0.1,101))+
+    scale_x_continuous(limits = c(-1, 50))+
+    geom_hline(yintercept = 50)+
+    geom_hline(yintercept = 10)
+   
+```
+
+From this curves I read of the linear part of the response where we cross the 50% survival rate and use this than to calculate the linear models below.
+
+###Resulting EC50 values for the strains tested under our drug concentrations
+
+```{r}
+#Here I use the filtered matrix to make the calculation of the EC50 more robust
+#Calculate the model for WB
+ modelWB <- lm(WB~Conc, data = MTZ_WB ,subset = Conc<11)
+
+#summary(modelWB)
+fWB <- round(coef(modelWB) ,10)
+
+eqWB <- paste0("y = ", round(fWB[1],3),
+             ifelse(sign(fWB[2])==1, " + ", " - "), abs(round(fWB[2],3)), " x ")
+
+eWB <- round(solve(fWB[2], 50-fWB[1]) ,2)
+
+EC50WB <- paste0("EC50[µM] = ", eWB[1])
+
+gWB <- ggplot(MTZ_WB) + 
+    ylab("Procent survival MTZ WB") + 
+    geom_point (mapping = aes(x = Conc, y = WB), color="red")+
+    theme_bw() +
+    scale_x_continuous(limits = c(0, 15)) +
+    scale_y_continuous(limits = c(0.1,105),trans = "log")+
+    stat_smooth(aes(x = Conc, y = WB), method="lm", color="red")+
+    annotate(geom="text", x=10, y=5, label=eqWB,
+              color="black")+
+    annotate(geom="text", x=10, y=2, label=EC50WB,
+              color="black")
+
+#Calculate the model for C6NR
+ modelC6NR <- lm(C6NR~Conc, data = MTZ_C6NR ,subset = Conc<11)
+
+#summary(modelC6NR)
+fC6NR <- round(coef(modelC6NR) ,10)
+
+eqC6NR <- paste0("y = ", round(fC6NR[1],3),
+             ifelse(sign(fC6NR[2])==1, " + ", " - "), abs(round(fC6NR[2],3)), " x ")
+
+eC6NR <- round(solve(fC6NR[2], 50-fC6NR[1]) ,2)
+
+EC50C6NR <- paste0("EC50[µM] = ", eC6NR[1])
+
+gC6NR <-ggplot(MTZ_C6NR) + 
+    ylab("Procent survival MTZ C6NR") + 
+    geom_point (mapping = aes(x = Conc, y = C6NR), color="blue")+
+    theme_bw() +
+    scale_x_continuous(limits = c(0, 15)) +
+    scale_y_continuous(limits = c(0.1,105),trans = "log")+
+    stat_smooth(aes(x = Conc, y = C6NR), method="lm", color="blue")+
+    annotate(geom="text", x=10, y=5, label=eqC6NR,
+              color="black")+
+    annotate(geom="text", x=10, y=2, label=EC50C6NR,
+              color="black")
+
+#Calculate the model for C60.5
+ modelC60.5 <- lm(C60.5~Conc, data = MTZ_C60.5 ,subset = Conc>4)
+
+#summary(modelC60.5)
+fC60.5 <- round(coef(modelC60.5) ,10)
+
+eqC60.5 <- paste0("y = ", round(fC60.5[1],3),
+             ifelse(sign(fC60.5[2])==1, " + ", " - "), abs(round(fC60.5[2],3)), " x ")
+
+eC60.5 <- round(solve(fC60.5[2], 50-fC60.5[1]) ,2)
+
+EC50C60.5 <- paste0("EC50[µM] = ", eC60.5[1])
+
+gC60.5 <- ggplot(MTZ_C60.5) + 
+    ylab("Procent survival MTZ C60.5") + 
+    geom_point (mapping = aes(x = Conc, y = C60.5), color="green")+
+    theme_bw() +
+    scale_x_continuous(limits = c(10, 50)) +
+    scale_y_continuous(limits = c(0.1,105),trans = "log")+
+    stat_smooth(aes(x = Conc, y = C60.5), method="lm", color="green")+
+    annotate(geom="text", x=30, y=5, label=eqC60.5,
+              color="black")+
+    annotate(geom="text", x=30, y=2, label=EC50C60.5,
+              color="black")
+
+#Calculate the model for C6aI
+ modelC6aI <- lm(C6aI~Conc, data = MTZ_C6aI,subset = Conc>1 & Conc<50)
+
+#summary(modelC6aI)
+fC6aI <- round(coef(modelC6aI) ,10)
+
+eqC6aI <- paste0("y = ", round(fC6aI[1],3),
+             ifelse(sign(fC6aI[2])==1, " + ", " - "), abs(round(fC6aI[2],3)), " x ")
+
+eC6aI <- round(solve(fC6aI[2], 50-fC6aI[1]) ,2)
+
+EC50C6aI <- paste0("EC50[µM] = ", eC6aI[1])
+
+gC6aI <- ggplot(MTZ_C6aI) + 
+    ylab("Procent survival MTZ C6aI") + 
+    geom_point (mapping = aes(x = Conc, y = C6aI), color="black")+
+    theme_bw() +
+    scale_x_continuous(limits = c(1, 50)) +
+    scale_y_continuous(limits = c(0.1,105),trans = "log")+
+    stat_smooth(aes(x = Conc, y = C6aI), method="lm", color="black")+
+    annotate(geom="text", x=10, y=5, label=eqC6aI,
+              color="black")+
+    annotate(geom="text", x=10, y=2, label=EC50C6aI,
+              color="black")
+
+EC50valuesMTZ8_8_19 <- tribble(
+   ~" ", ~"WB", ~"C6NR", ~"C60.5", ~"C6aI", 
+   #--|--|----
+  "EC50[µM]", eWB, eC6NR, eC60.5, eC6aI)
+
+kable(EC50valuesMTZ8_8_19)
+write_csv(EC50valuesMTZ8_8_19, path = "EC50MTZ8_19.csv")
+
+vplayout <- function(x, y) viewport(layout.pos.row = x, layout.pos.col = y)
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(2, 2)))
+print(gWB, vp = vplayout(1, 1))
+print(gC6NR, vp = vplayout(1, 2))
+print(gC60.5, vp = vplayout(2, 1))
+print(gC6aI, vp = vplayout(2, 2))
+```
+#Dicussion and conclusion
+
+
